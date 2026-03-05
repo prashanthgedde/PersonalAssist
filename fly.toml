@@ -1,0 +1,14 @@
+[build]
+
+[env]
+  USER_TIMEZONE = "Asia/Kolkata"
+  CHROMA_PATH = "/data/chroma_db"
+
+[[mounts]]
+  source = "chroma_data"
+  destination = "/data/chroma_db"
+
+[[vm]]
+  memory = "512mb"
+  cpu_kind = "shared"
+  cpus = 1

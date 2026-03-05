@@ -22,7 +22,7 @@ def _get_mem() -> Memory:
                 "provider": "chroma",
                 "config": {
                     "collection_name": "personalassist",
-                    "path": "./chroma_db"
+                    "path": os.getenv("CHROMA_PATH", "./chroma_db")
                 }
             },
             "llm": {
