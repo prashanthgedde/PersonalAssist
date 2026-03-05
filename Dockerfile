@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir --index-url https://pypi.org/simple .
 # Copy application code
 COPY main.py tools.py memory.py ./
 
-# Persistent volume mount point for chroma_db
+# Ensure mount point exists for local runs (fly.io volume handles this in production)
 RUN mkdir -p /data/chroma_db
 
 CMD ["python", "main.py"]
