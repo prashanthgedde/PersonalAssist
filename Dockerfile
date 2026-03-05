@@ -8,8 +8,8 @@ RUN pip install uv
 # Copy dependency files first for layer caching
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies
-RUN uv sync --frozen --no-dev
+# Install dependencies using public PyPI (uv.lock may reference internal Netflix PyPI)
+RUN UV_INDEX_URL=https://pypi.org/simple uv sync --frozen --no-dev
 
 # Copy application code
 COPY main.py tools.py memory.py ./
