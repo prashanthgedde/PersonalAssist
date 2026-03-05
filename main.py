@@ -14,6 +14,8 @@ load_dotenv()
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://personalassist.fly.dev
+PORT = int(os.getenv("PORT", 8080))
 
 client = OpenAI(api_key=OPENAI_API_KEY)
 
@@ -91,4 +93,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    app.run_polling()
+
+    if WEBHOOK_URL:
+        app.run_webhook(
+            listen="0.0.0.0",
+            port=PORT,
+            url_path=TELEGRAM_TOKEN,           # secret path — Telegram posts here
+            webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}",
+        )
+    else:
+        app.run_polling()                       # fallback for local dev

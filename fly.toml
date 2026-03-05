@@ -3,6 +3,15 @@
 [env]
   USER_TIMEZONE = "Asia/Kolkata"
   CHROMA_PATH = "/data/chroma_db"
+  PORT = "8080"
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    handlers = ["tls", "http"]
+    port = 443
 
 [[mounts]]
   source = "chroma_data"
