@@ -14,3 +14,6 @@ wheels/
 
 # mem0 local vector store
 chroma_db/
+
+# uv lock file may contain internal registry URLs (Netflix PyPI)
+uv.lock
