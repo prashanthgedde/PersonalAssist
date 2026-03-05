@@ -1,0 +1,17 @@
+[project]
+name = "personalassist"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "duckduckgo-search>=8.1.1",
+    "openai>=2.24.0",
+    "python-dotenv>=1.2.2",
+    "python-telegram-bot>=22.6",
+    "yfinance>=0.2.0",
+    "requests>=2.32.0",
+    "mem0ai>=1.0.4",
+    "chromadb>=1.5.2",
+    "onnxruntime<1.21",
+]
