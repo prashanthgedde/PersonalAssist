@@ -5,7 +5,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from tools import search_web, get_stock, get_weather, TOOL_DEFINITIONS
 from memory import build_system_prompt, add_to_memory
@@ -22,6 +22,11 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 user_history = {}
+
+
+async def post_init(application: Application) -> None:
+    """Called after the event loop starts — safe place to init the scheduler."""
+    init_scheduler(application.bot)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -57,7 +62,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             fn_args = json.loads(tool_call.function.arguments)
 
             if fn_name == "search_web":
-                content = search_web(fn_args["query"])
+                content = search_web(fn_args["query"], fn_args.get("sources"))
             elif fn_name == "get_stock":
                 content = get_stock(fn_args["ticker"])
             elif fn_name == "get_weather":
@@ -94,16 +99,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 if __name__ == '__main__':
-    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).post_init(post_init).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-
-    init_scheduler(app.bot)
 
     if WEBHOOK_URL:
         app.run_webhook(
             listen="0.0.0.0",
             port=PORT,
-            url_path=TELEGRAM_TOKEN,           # secret path — Telegram posts here
+            url_path=TELEGRAM_TOKEN,
             webhook_url=f"{WEBHOOK_URL}/{TELEGRAM_TOKEN}",
         )
     else:
