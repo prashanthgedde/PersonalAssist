@@ -11,6 +11,7 @@ from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageH
 from tools import search_web, get_stock, get_weather, TOOL_DEFINITIONS
 from memory import build_system_prompt, add_to_memory
 from reminders import init_scheduler, set_reminder
+from orchestrator import classify_query, run_agentic_loop
 
 load_dotenv()
 
@@ -44,51 +45,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_history[chat_id].append({"role": "user", "content": user_text})
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
-    # Step 1: Send to OpenAI
-    response = client.chat.completions.create(
-        model="gpt-4o-mini",
-        messages=user_history[chat_id],
-        tools=TOOL_DEFINITIONS,
-        tool_choice="auto"
-    )
+    # Tool dispatch table — set_reminder needs chat_id bound at call time
+    tool_fns = {
+        "search_web": search_web,
+        "get_stock": get_stock,
+        "get_weather": get_weather,
+        "set_reminder": lambda **kw: set_reminder(chat_id, kw["message"], kw["remind_at"]),
+    }
 
-    response_message = response.choices[0].message
+    # Orchestrator: decide fast path vs agentic loop
+    complexity = classify_query(client, user_text)
 
-    # Step 2: Handle tool calls
-    if response_message.tool_calls:
-        user_history[chat_id].append(response_message.model_dump())
-
-        for tool_call in response_message.tool_calls:
-            fn_name = tool_call.function.name
-            fn_args = json.loads(tool_call.function.arguments)
-
-            if fn_name == "search_web":
-                content = search_web(fn_args["query"], fn_args.get("sources"))
-            elif fn_name == "get_stock":
-                content = get_stock(fn_args["ticker"])
-            elif fn_name == "get_weather":
-                content = get_weather(fn_args["location"])
-            elif fn_name == "set_reminder":
-                content = set_reminder(chat_id, fn_args["message"], fn_args["remind_at"])
-            else:
-                content = "Unknown tool."
-
-            user_history[chat_id].append({
-                "role": "tool",
-                "tool_call_id": tool_call.id,
-                "content": content
-            })
-
-        # Step 3: Final response with tool results
-        second_response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=user_history[chat_id]
-        )
-        bot_text = second_response.choices[0].message.content
+    if complexity == "complex":
+        # Agentic loop: LLM can call tools across multiple rounds
+        bot_text = run_agentic_loop(client, user_history[chat_id], TOOL_DEFINITIONS, tool_fns)
     else:
-        bot_text = response_message.content
+        # Fast path: single OpenAI call + at most one round of tool calls
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=user_history[chat_id],
+            tools=TOOL_DEFINITIONS,
+            tool_choice="auto"
+        )
+        response_message = response.choices[0].message
 
-    user_history[chat_id].append({"role": "assistant", "content": bot_text})
+        if response_message.tool_calls:
+            user_history[chat_id].append(response_message.model_dump())
+
+            for tool_call in response_message.tool_calls:
+                fn_name = tool_call.function.name
+                fn_args = json.loads(tool_call.function.arguments)
+                fn = tool_fns.get(fn_name)
+                content = fn(**fn_args) if fn else "Unknown tool."
+                user_history[chat_id].append({
+                    "role": "tool",
+                    "tool_call_id": tool_call.id,
+                    "content": content
+                })
+
+            second_response = client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=user_history[chat_id]
+            )
+            bot_text = second_response.choices[0].message.content
+        else:
+            bot_text = response_message.content
+        user_history[chat_id].append({"role": "assistant", "content": bot_text})
 
     # Persist this exchange to mem0
     add_to_memory(chat_id, [
