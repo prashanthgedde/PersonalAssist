@@ -5,6 +5,7 @@ import os
 from dotenv import load_dotenv
 from openai import OpenAI
 from telegram import Update
+from telegram.constants import ParseMode
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
 
 from tools import search_web, get_stock, get_weather, TOOL_DEFINITIONS
@@ -95,7 +96,11 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"role": "assistant", "content": bot_text}
     ])
 
-    await update.message.reply_text(bot_text)
+    # Send with HTML formatting; fall back to plain text if HTML is malformed
+    try:
+        await update.message.reply_text(bot_text, parse_mode=ParseMode.HTML)
+    except Exception:
+        await update.message.reply_text(bot_text)
 
 
 if __name__ == '__main__':
