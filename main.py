@@ -9,6 +9,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 from tools import search_web, get_stock, get_weather, TOOL_DEFINITIONS
 from memory import build_system_prompt, add_to_memory
+from reminders import init_scheduler, set_reminder
 
 load_dotenv()
 
@@ -61,6 +62,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 content = get_stock(fn_args["ticker"])
             elif fn_name == "get_weather":
                 content = get_weather(fn_args["location"])
+            elif fn_name == "set_reminder":
+                content = set_reminder(chat_id, fn_args["message"], fn_args["remind_at"])
             else:
                 content = "Unknown tool."
 
@@ -93,6 +96,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+    init_scheduler(app.bot)
 
     if WEBHOOK_URL:
         app.run_webhook(

@@ -1,12 +1,35 @@
 import logging
+import os
 import requests
 import yfinance as yf
 from duckduckgo_search import DDGS
 
+try:
+    from tavily import TavilyClient
+    _tavily = TavilyClient(api_key=os.getenv("TAVILY_API_KEY")) if os.getenv("TAVILY_API_KEY") else None
+except ImportError:
+    _tavily = None
 
-def search_web(query: str) -> str:
-    """Searches the live web for current news or facts."""
+
+def search_web(query: str, sources: list[str] | None = None) -> str:
+    """Searches the web using Tavily (primary) or DuckDuckGo (fallback)."""
     logging.info(f"Searching for: {query}")
+
+    if _tavily:
+        try:
+            kwargs = {"max_results": 5}
+            if sources:
+                kwargs["include_domains"] = sources
+            response = _tavily.search(query, **kwargs)
+            results = response.get("results", [])
+            return "\n".join([
+                f"- [{r['title']}]({r['url']})\n  {r['content'][:200]}"
+                for r in results
+            ])
+        except Exception as e:
+            logging.warning(f"Tavily search failed, falling back to DuckDuckGo: {e}")
+
+    # DuckDuckGo fallback
     try:
         with DDGS() as ddgs:
             results = [r for r in ddgs.news(query, max_results=3)]
@@ -70,11 +93,19 @@ TOOL_DEFINITIONS = [
         "type": "function",
         "function": {
             "name": "search_web",
-            "description": "Search the web for news or current events",
+            "description": (
+                "Search the web for news, current events, Reddit discussions, YouTube videos, or any topic. "
+                "Optionally restrict to specific sources like reddit.com, x.com, youtube.com, techcrunch.com."
+            ),
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "query": {"type": "string", "description": "The search query"}
+                    "query": {"type": "string", "description": "The search query"},
+                    "sources": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "Optional list of domains to restrict search to, e.g. ['reddit.com', 'x.com']"
+                    }
                 },
                 "required": ["query"]
             }
@@ -105,6 +136,21 @@ TOOL_DEFINITIONS = [
                     "location": {"type": "string", "description": "City name or location, e.g. 'London', 'New York'"}
                 },
                 "required": ["location"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_reminder",
+            "description": "Set a reminder to be sent to the user at a specific date and time",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "message": {"type": "string", "description": "The reminder message"},
+                    "remind_at": {"type": "string", "description": "ISO 8601 datetime string e.g. 2026-03-05T15:00:00"}
+                },
+                "required": ["message", "remind_at"]
             }
         }
     }
