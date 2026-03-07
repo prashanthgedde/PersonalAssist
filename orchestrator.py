@@ -1,7 +1,7 @@
 import json
 import logging
 
-from openai import OpenAI
+from openai import AsyncOpenAI
 
 _ORCHESTRATOR_SYSTEM = (
     "Classify whether the user's request requires simple or complex processing.\n\n"
@@ -28,7 +28,7 @@ _COMPLEX_PATTERNS = (
 )
 
 
-def classify_query(client: OpenAI, user_text: str) -> str:
+async def classify_query(client: AsyncOpenAI, user_text: str) -> str:
     """Returns 'simple' or 'complex'. Uses keyword heuristics first to avoid an LLM round trip."""
     lower = user_text.lower()
 
@@ -44,7 +44,7 @@ def classify_query(client: OpenAI, user_text: str) -> str:
 
     # Ambiguous — ask the LLM
     try:
-        resp = client.chat.completions.create(
+        resp = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": _ORCHESTRATOR_SYSTEM},
@@ -64,8 +64,8 @@ def classify_query(client: OpenAI, user_text: str) -> str:
     return "simple"
 
 
-def run_agentic_loop(
-    client: OpenAI,
+async def run_agentic_loop(
+    client: AsyncOpenAI,
     messages: list,
     tool_definitions: list,
     tool_fns: dict,
@@ -79,7 +79,7 @@ def run_agentic_loop(
     Returns the final assistant text.
     """
     for iteration in range(MAX_AGENTIC_ITERATIONS):
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
             tools=tool_definitions,
@@ -121,7 +121,7 @@ def run_agentic_loop(
         "role": "user",
         "content": "Please summarize everything you've found and give a final answer now.",
     })
-    response = client.chat.completions.create(model="gpt-4o-mini", messages=messages)
+    response = await client.chat.completions.create(model="gpt-4o-mini", messages=messages)
     final = response.choices[0].message.content
     messages.append({"role": "assistant", "content": final})
     return final

@@ -4,7 +4,7 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from openai import OpenAI
+from openai import AsyncOpenAI
 from telegram import Update
 from telegram.constants import ParseMode
 from telegram.ext import Application, ApplicationBuilder, ContextTypes, MessageHandler, filters
@@ -21,7 +21,7 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://personalassist.fly.dev
 PORT = int(os.getenv("PORT", 8080))
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
 logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
 user_history = {}
@@ -36,15 +36,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_text = update.message.text
 
-    # Refresh system prompt with memories relevant to this message
-    system_content = build_system_prompt(chat_id, user_text)
+    # Show typing indicator immediately before any blocking calls
+    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+
+    # Refresh system prompt — runs embedding search in thread so it doesn't block the event loop
+    loop = asyncio.get_event_loop()
+    system_content = await loop.run_in_executor(None, build_system_prompt, chat_id, user_text)
     if chat_id not in user_history:
         user_history[chat_id] = [{"role": "system", "content": system_content}]
     else:
         user_history[chat_id][0] = {"role": "system", "content": system_content}
 
     user_history[chat_id].append({"role": "user", "content": user_text})
-    await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     # Tool dispatch table — set_reminder needs chat_id bound at call time
     tool_fns = {
@@ -55,14 +58,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
 
     # Orchestrator: decide fast path vs agentic loop
-    complexity = classify_query(client, user_text)
+    complexity = await classify_query(client, user_text)
 
     if complexity == "complex":
         # Agentic loop: LLM can call tools across multiple rounds
-        bot_text = run_agentic_loop(client, user_history[chat_id], TOOL_DEFINITIONS, tool_fns)
+        bot_text = await run_agentic_loop(client, user_history[chat_id], TOOL_DEFINITIONS, tool_fns)
     else:
         # Fast path: single OpenAI call + at most one round of tool calls
-        response = client.chat.completions.create(
+        response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=user_history[chat_id],
             tools=TOOL_DEFINITIONS,
@@ -84,7 +87,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     "content": content
                 })
 
-            second_response = client.chat.completions.create(
+            second_response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=user_history[chat_id]
             )
