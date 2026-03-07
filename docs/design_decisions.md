@@ -2,9 +2,9 @@
 
 ## 1. Modular File Structure
 
-**Decision**: Separate code into `main.py`, `tools.py`, and `memory.py`.
+**Decision**: Separate code into `main.py`, `tools.py`, `memory.py`, `reminders.py`, and `orchestrator.py`.
 
-**Rationale**: Keep orchestration logic (main.py) clean and focused on the bot loop. Tool functions and their OpenAI schema definitions live together in tools.py so they stay in sync. Memory logic is isolated in memory.py so the backend can be swapped without touching the rest.
+**Rationale**: Keep orchestration logic (main.py) clean and focused on routing. Tool functions and their OpenAI schema definitions live together in tools.py so they stay in sync. Memory logic is isolated in memory.py so the backend can be swapped without touching the rest. Reminders and orchestration are their own modules to keep concerns separated.
 
 ---
 
@@ -40,11 +40,13 @@
 
 ---
 
-## 5. Tool: search_web (DuckDuckGo)
+## 5. Tool: search_web (Tavily primary, DuckDuckGo fallback)
 
-**Decision**: Use `DDGS.news()` as primary, fall back to `DDGS.text()` if no news results.
+**Decision**: Use Tavily as the primary search provider, with DuckDuckGo as a fallback if Tavily is unavailable or fails.
 
-**Rationale**: `ddgs.news()` returns dated news articles with titles and snippets — ideal for current events. `ddgs.text()` is a broader web search useful for factual queries that aren't news-based. No API key required (free).
+**Rationale**: Tavily is an AI-optimized search API that returns cleaner, more structured results than scraping DuckDuckGo. It supports `include_domains` for restricting searches to specific sources (e.g., `reddit.com`, `x.com`, `youtube.com`). DuckDuckGo (`DDGS.news()` → `DDGS.text()`) is retained as a zero-config fallback.
+
+**Config**: `TAVILY_API_KEY` env var required for Tavily. If unset, silently falls back to DuckDuckGo.
 
 ---
 
@@ -62,7 +64,7 @@
 
 **Decision**: Use yfinance to fetch `t.info` dict for price and key metrics.
 
-**Rationale**: No API key required for personal use. Returns `currentPrice` (or `regularMarketPrice` as fallback), change%, market cap, 52-week high/low.
+**Rationale**: No API key required for personal use. Returns `currentPrice` (or `regularMarketPrice` as fallback), change%, market cap, 52-week high/low. Same library will be reused for portfolio tracking.
 
 ---
 
@@ -87,3 +89,54 @@
 **Decision**: Removed the explicit `save_memory` tool after switching to mem0.
 
 **Rationale**: mem0 automatically extracts and stores memories from every `add()` call using its internal LLM pass. Requiring the LLM to explicitly call a save tool was brittle — it could forget, or save irrelevant things. Auto-extraction is more reliable.
+
+---
+
+## 11. Reminders: APScheduler + SQLite on Fly Volume
+
+**Decision**: Use `AsyncIOScheduler` from APScheduler with `SQLAlchemyJobStore` backed by SQLite, stored on the Fly.io persistent volume at `$CHROMA_PATH/reminders.db`.
+
+**Rationale**: APScheduler integrates cleanly with asyncio (required by python-telegram-bot). SQLite persistence means reminders survive bot restarts. Storing the DB inside `CHROMA_PATH` keeps all persistent data co-located on the same fly.io volume — no second volume needed.
+
+**Key implementation detail**: `init_scheduler()` must be called inside `post_init` (python-telegram-bot's async hook), not at module import time. Calling it at import time causes `RuntimeError: no running event loop` because APScheduler's `AsyncIOScheduler` needs a running event loop to start.
+
+---
+
+## 12. Orchestrator: Fast Path vs Agentic Loop
+
+**Decision**: Add a lightweight classifier (`classify_query`) that routes each message to either a single-pass flow or a multi-step agentic loop.
+
+**Rationale**: Most queries (weather, stock, reminders, casual chat) need only one round of tool calls. Routing all messages through a multi-step loop adds latency and cost for no benefit. For complex queries (research, comparison, multi-source summarization), the agentic loop allows the LLM to call tools across multiple iterations — each round informed by the last — up to `MAX_AGENTIC_ITERATIONS = 6`.
+
+**Implementation**: `orchestrator.py` — `classify_query()` makes a cheap `max_tokens=5, temperature=0` call to gpt-4o-mini. `run_agentic_loop()` implements a ReAct-style loop that mutates `user_history` in place. Falls back to simple on classifier error.
+
+**Tool dispatch**: Replaced the if/elif chain with a `tool_fns` dict (kwargs-based). `set_reminder` is wrapped in a lambda to bind `chat_id` at call time, keeping the dict pattern uniform.
+
+---
+
+## 13. Telegram HTML Formatting
+
+**Decision**: Format all LLM responses using Telegram HTML (`ParseMode.HTML`) with a plain-text fallback.
+
+**Rationale**: Telegram supports a subset of HTML for rich formatting (`<b>`, `<i>`, `<code>`, `<a href>`). Instructing the LLM to use these tags produces mobile-friendly, scannable output. A try/except fallback (`reply_text(bot_text)` without parse_mode) prevents crashes if the LLM produces malformed HTML.
+
+---
+
+## 14. Second Brain / Notes (Planned)
+
+**Decision (planned)**: Store user notes as markdown files on the fly.io volume, indexed into a separate Chroma collection for semantic search.
+
+**Rationale**:
+- Markdown files are human-readable, portable, and easy to back up via `flyctl ssh`.
+- A separate Chroma collection (`notes`) keeps explicit user-written thoughts distinct from auto-extracted conversation memories (mem0 collection).
+- Notes will be injected into the system prompt alongside mem0 memories — surfaced semantically per query — so they passively influence every response without the user needing to reference them explicitly.
+- Planned organization: `notes/daily/YYYY-MM-DD.md` for brain dumps, `notes/topics/<topic>.md` for longer-form notes.
+- Tools: `add_note`, `search_notes`, `get_daily_note`.
+
+---
+
+## 15. Portfolio Tracking (Planned)
+
+**Decision (planned)**: Store holdings as a JSON file on the fly.io volume; fetch prices via yfinance (already installed).
+
+**Rationale**: No broker OAuth or API keys needed — yfinance uses public Yahoo Finance data (~15 min delayed). Holdings (ticker, shares, avg cost) stored locally in JSON for privacy. Tools: `get_portfolio` (P&L summary), `update_portfolio` (add/remove position).
