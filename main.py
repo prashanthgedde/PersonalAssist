@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 import os
@@ -92,17 +93,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_text = response_message.content
         user_history[chat_id].append({"role": "assistant", "content": bot_text})
 
-    # Persist this exchange to mem0
-    add_to_memory(chat_id, [
-        {"role": "user", "content": user_text},
-        {"role": "assistant", "content": bot_text}
-    ])
-
-    # Send with HTML formatting; fall back to plain text if HTML is malformed
+    # Send reply immediately — don't wait for memory persistence
     try:
         await update.message.reply_text(bot_text, parse_mode=ParseMode.HTML)
     except Exception:
         await update.message.reply_text(bot_text)
+
+    # Persist to mem0 in the background so it doesn't block the response
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(None, add_to_memory, chat_id, [
+        {"role": "user", "content": user_text},
+        {"role": "assistant", "content": bot_text}
+    ])
 
 
 if __name__ == '__main__':

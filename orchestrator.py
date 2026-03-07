@@ -13,9 +13,36 @@ _ORCHESTRATOR_SYSTEM = (
 
 MAX_AGENTIC_ITERATIONS = 6
 
+# Keywords that guarantee a simple fast-path without an LLM classify call
+_SIMPLE_PATTERNS = (
+    "weather", "stock", "price", "remind", "reminder", "what time", "what day",
+    "what's the", "whats the", "hello", "hi ", "hey ", "thanks", "thank you",
+    "who are you", "what can you", "help", "how are you",
+)
+
+# Keywords that guarantee complex routing without an LLM classify call
+_COMPLEX_PATTERNS = (
+    "research", "compare", "comparison", "comprehensive", "summarize and",
+    "analyze", "find everything", "all sources", "deep dive", "in depth",
+    "pros and cons", "versus", " vs ", "multiple sources",
+)
+
 
 def classify_query(client: OpenAI, user_text: str) -> str:
-    """Returns 'simple' or 'complex'."""
+    """Returns 'simple' or 'complex'. Uses keyword heuristics first to avoid an LLM round trip."""
+    lower = user_text.lower()
+
+    for kw in _SIMPLE_PATTERNS:
+        if kw in lower:
+            logging.info(f"Orchestrator: SIMPLE (heuristic) — '{user_text[:80]}'")
+            return "simple"
+
+    for kw in _COMPLEX_PATTERNS:
+        if kw in lower:
+            logging.info(f"Orchestrator: COMPLEX (heuristic) — '{user_text[:80]}'")
+            return "complex"
+
+    # Ambiguous — ask the LLM
     try:
         resp = client.chat.completions.create(
             model="gpt-4o-mini",
@@ -28,12 +55,12 @@ def classify_query(client: OpenAI, user_text: str) -> str:
         )
         verdict = resp.choices[0].message.content.strip().lower()
         if "complex" in verdict:
-            logging.info(f"Orchestrator: COMPLEX — '{user_text[:80]}'")
+            logging.info(f"Orchestrator: COMPLEX (LLM) — '{user_text[:80]}'")
             return "complex"
     except Exception as e:
         logging.warning(f"Orchestrator classification failed, defaulting to simple: {e}")
 
-    logging.info(f"Orchestrator: SIMPLE — '{user_text[:80]}'")
+    logging.info(f"Orchestrator: SIMPLE (LLM) — '{user_text[:80]}'")
     return "simple"
 
 
