@@ -98,7 +98,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Send reply immediately — don't wait for memory persistence
     try:
-        await update.message.reply_text(bot_text, parse_mode=ParseMode.HTML)
+        await update.message.reply_text(bot_text, parse_mode=ParseMode.MARKDOWN_V2)
     except Exception:
         await update.message.reply_text(bot_text)
 
