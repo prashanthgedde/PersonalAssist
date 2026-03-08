@@ -13,6 +13,7 @@ from tools import search_web, get_stock, get_weather, TOOL_DEFINITIONS
 from memory import build_system_prompt, add_to_memory
 from reminders import init_scheduler, set_reminder
 from orchestrator import classify_query, run_agentic_loop
+from response_formatter import format_response
 
 load_dotenv()
 
@@ -96,11 +97,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             bot_text = response_message.content
         user_history[chat_id].append({"role": "assistant", "content": bot_text})
 
-    # Send reply immediately — don't wait for memory persistence
-    try:
-        await update.message.reply_text(bot_text, parse_mode=ParseMode.MARKDOWN_V2)
-    except Exception:
-        await update.message.reply_text(bot_text)
+    # Format and send reply immediately — don't wait for memory persistence
+    formatted_text, parse_mode = await format_response(bot_text)
+    await update.message.reply_text(formatted_text, parse_mode=parse_mode)
 
     # Persist to mem0 in the background so it doesn't block the response
     loop = asyncio.get_event_loop()
