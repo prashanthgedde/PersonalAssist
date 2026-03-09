@@ -48,8 +48,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
 
     # Refresh system prompt — runs embedding search in thread so it doesn't block the event loop
+    logging.info(f"[SYSTEM_PROMPT] Building system prompt with mem0 search...")
     loop = asyncio.get_event_loop()
+    prompt_start = time.time()
     system_content = await loop.run_in_executor(None, build_system_prompt, chat_id, user_text)
+    prompt_time_ms = (time.time() - prompt_start) * 1000
+    logging.info(f"[SYSTEM_PROMPT] Ready in {prompt_time_ms:.1f}ms")
     if chat_id not in user_history:
         user_history[chat_id] = [{"role": "system", "content": system_content}]
     else:

@@ -1,5 +1,6 @@
 import logging
 import os
+import time
 from datetime import datetime, timezone
 
 from mem0 import Memory
@@ -68,12 +69,19 @@ def build_system_prompt(chat_id: int, query: str = "") -> str:
     context = ""
     if query:
         try:
+            logging.info(f"[MEMORY] Searching mem0 for query: '{query[:80]}'")
+            search_start = time.time()
             results = _get_mem().search(query, user_id=str(chat_id), limit=5)
+            search_time_ms = (time.time() - search_start) * 1000
             memories = [r["memory"] for r in results.get("results", [])]
+            logging.info(f"[MEMORY] Search completed in {search_time_ms:.1f}ms, found {len(memories)} memories")
             if memories:
                 context = "\n".join(f"- {m}" for m in memories)
+                logging.debug(f"[MEMORY] Memories:\n{context}")
+            else:
+                logging.info(f"[MEMORY] No relevant memories found")
         except Exception as e:
-            logging.error(f"Memory search failed: {e}")
+            logging.error(f"[MEMORY] Search failed: {e}", exc_info=True)
 
     prompt = f"{BASE_SYSTEM_PROMPT}\n\n{datetime_line}"
     if location_line:
@@ -86,7 +94,10 @@ def build_system_prompt(chat_id: int, query: str = "") -> str:
 def add_to_memory(chat_id: int, messages: list):
     """Extract and persist memories from a user/assistant exchange."""
     try:
+        logging.info(f"[MEMORY] Adding memories for user {chat_id}")
+        add_start = time.time()
         _get_mem().add(messages, user_id=str(chat_id))
-        logging.info(f"Memory updated for {chat_id}")
+        add_time_ms = (time.time() - add_start) * 1000
+        logging.info(f"[MEMORY] Memories persisted in {add_time_ms:.1f}ms")
     except Exception as e:
-        logging.error(f"Memory add failed: {e}")
+        logging.error(f"[MEMORY] Add failed: {e}", exc_info=True)
