@@ -14,13 +14,17 @@ except ImportError:
 def search_web(query: str, sources: list[str] | None = None) -> str:
     """Searches the web using Tavily (primary) or DuckDuckGo (fallback)."""
     logging.info(f"Searching for: {query}")
+    logging.info(f"[SEARCH] Tavily available: {_tavily is not None}")
 
     if _tavily:
         try:
             kwargs = {"max_results": 5}
             if sources:
                 kwargs["include_domains"] = sources
+            logging.info(f"[SEARCH] Calling Tavily API: query='{query}', sources={sources}")
+            logging.debug(f"[SEARCH] Tavily request kwargs: {kwargs}")
             response = _tavily.search(query, **kwargs)
+            logging.info(f"[SEARCH] Tavily returned {len(response.get('results', []))} results")
             results = response.get("results", [])
             return "\n".join([
                 f"- [{r['title']}]({r['url']})\n  {r['content'][:200]}"
