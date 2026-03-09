@@ -4,6 +4,9 @@ import logging
 import os
 import re
 
+# MUST import logging_config first to set up TRACE logging before other modules
+import logging_config  # noqa: F401
+
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
 from telegram import Update
@@ -24,22 +27,6 @@ WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # e.g. https://personalassist.fly.dev
 PORT = int(os.getenv("PORT", 8080))
 
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
-
-# Add TRACE logging level (below DEBUG)
-TRACE_LEVEL = 5
-logging.addLevelName(TRACE_LEVEL, "TRACE")
-
-def trace(self, message, *args, **kwargs):
-    if self.isEnabledFor(TRACE_LEVEL):
-        self._log(TRACE_LEVEL, message, args, **kwargs)
-
-logging.Logger.trace = trace
-
-# Configure logging with TRACE enabled
-logging.basicConfig(
-    format='%(asctime)s - %(levelname)s - %(message)s',
-    level=TRACE_LEVEL  # Enable TRACE and all higher levels
-)
 user_history = {}
 
 
