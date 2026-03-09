@@ -1,6 +1,9 @@
 import logging
 import re
 
+# Import logging_config to ensure TRACE level is available
+import logging_config  # noqa: F401
+
 from telegram.constants import ParseMode
 
 # MarkdownV2 special characters that must be escaped when not part of formatting

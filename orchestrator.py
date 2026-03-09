@@ -1,6 +1,9 @@
 import json
 import logging
 
+# Import logging_config to ensure TRACE level is available
+import logging_config  # noqa: F401
+
 from openai import AsyncOpenAI
 
 _ORCHESTRATOR_SYSTEM = (
