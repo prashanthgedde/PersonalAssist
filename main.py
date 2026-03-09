@@ -2,6 +2,7 @@ import asyncio
 import json
 import logging
 import os
+import re
 
 from dotenv import load_dotenv
 from openai import AsyncOpenAI
@@ -99,7 +100,20 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Format and send reply immediately — don't wait for memory persistence
     formatted_text, parse_mode = await format_response(bot_text)
-    await update.message.reply_text(formatted_text, parse_mode=parse_mode)
+    logging.info(f"Sending: parse_mode={parse_mode}, len={len(formatted_text)}")
+    try:
+        if parse_mode:
+            await update.message.reply_text(formatted_text, parse_mode=parse_mode)
+        else:
+            await update.message.reply_text(formatted_text)
+    except Exception as e:
+        logging.error(f"Failed to send message: {e}")
+        logging.debug(f"Problematic text: {formatted_text[:500]}")
+        # Last resort: send plain text with NO formatting
+        try:
+            await update.message.reply_text(re.sub(r'[*_`\[\]()]', '', formatted_text))
+        except Exception as e2:
+            logging.error(f"Failed even with stripped text: {e2}")
 
     # Persist to mem0 in the background so it doesn't block the response
     loop = asyncio.get_event_loop()

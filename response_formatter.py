@@ -81,26 +81,78 @@ def validate_markdownv2(text: str) -> tuple[bool, str]:
     """
     Validate MarkdownV2 syntax.
     Returns: (is_valid, error_message)
+
+    Key rules:
+    - * and _ must be balanced (even count of unescaped occurrences)
+    - ` must be balanced
+    - [ and ] must be balanced
+    - Underscores inside URLs and code blocks don't count (skip them)
     """
     if not text:
         return True, ""
 
-    # Check for unescaped special characters (basic check)
-    # This is a simplified validation; Telegram's parser is more lenient
+    # Skip validation for text containing unbalanced code blocks or links
+    # These are too complex to validate without a proper parser
+    # Instead, use a simpler heuristic: if has balanced basic structure, tentatively accept
+
+    def count_unescaped_outside_code_urls(char: str) -> int:
+        """Count unescaped char, but skip those inside backticks and URLs."""
+        count = 0
+        i = 0
+        in_code = False
+        in_url = False
+
+        while i < len(text):
+            # Track if we're inside backticks (inline code)
+            if text[i] == '`' and (i == 0 or text[i-1] != '\\'):
+                in_code = not in_code
+                i += 1
+                continue
+
+            # Track if we're inside parentheses (URLs in links)
+            if text[i] == '(' and (i == 0 or text[i-1] != '\\') and not in_code:
+                in_url = True
+                i += 1
+                continue
+            if text[i] == ')' and (i == 0 or text[i-1] != '\\') and not in_code and in_url:
+                in_url = False
+                i += 1
+                continue
+
+            # Only count char if not in code or URL
+            if text[i] == char and not in_code and not in_url:
+                # Check if it's escaped (preceded by odd number of backslashes)
+                num_backslashes = 0
+                j = i - 1
+                while j >= 0 and text[j] == '\\':
+                    num_backslashes += 1
+                    j -= 1
+                # If even number of backslashes (including 0), the char is unescaped
+                if num_backslashes % 2 == 0:
+                    count += 1
+            i += 1
+        return count
+
+    # Check balanced asterisks (bold)
+    asterisk_count = count_unescaped_outside_code_urls('*')
+    if asterisk_count % 2 != 0:
+        return False, f"Unbalanced asterisks (*) — found {asterisk_count} unescaped"
+
+    # Check balanced underscores (italic)
+    underscore_count = count_unescaped_outside_code_urls('_')
+    if underscore_count % 2 != 0:
+        return False, f"Unbalanced underscores (_) — found {underscore_count} unescaped"
+
+    # Check balanced backticks (code)
+    backtick_count = count_unescaped_outside_code_urls('`')
+    if backtick_count % 2 != 0:
+        return False, f"Unbalanced backticks (`) — found {backtick_count} unescaped"
 
     # Check for balanced brackets in links
-    link_pattern = r'\[.*?\]\(.*?\)'
-    links = re.findall(link_pattern, text)
-    for link in links:
-        if link.count('[') != link.count(']'):
-            return False, f"Unbalanced brackets in link: {link}"
-        if link.count('(') != link.count(')'):
-            return False, f"Unbalanced parentheses in link: {link}"
-
-    # Check for properly formatted code blocks (backticks)
-    backtick_count = text.count('`') - text.count(r'\`')
-    if backtick_count % 2 != 0:
-        return False, "Unbalanced backticks"
+    bracket_count = count_unescaped_outside_code_urls('[')
+    close_bracket_count = count_unescaped_outside_code_urls(']')
+    if bracket_count != close_bracket_count:
+        return False, f"Unbalanced brackets — [{bracket_count} vs ]{close_bracket_count}"
 
     return True, ""
 
@@ -130,15 +182,20 @@ async def format_response(bot_text: str) -> tuple[str, str]:
 
         if is_valid:
             logging.info("Response formatted as MarkdownV2 (valid)")
+            logging.debug(f"MarkdownV2 output (len={len(normalized)}): {normalized[:200]}...")
             return normalized, ParseMode.MARKDOWN_V2
         else:
-            logging.warning(f"MarkdownV2 validation failed: {error_msg} — falling back to plain text")
+            logging.warning(f"MarkdownV2 validation failed: {error_msg}")
+            logging.debug(f"Invalid MarkdownV2 (len={len(normalized)}): {normalized[:300]}...")
             # Strip all markdown/HTML for plain text fallback
             plain = re.sub(r'[*_`\[\]()]', '', bot_text)
+            logging.info(f"Fallback to plain text (len={len(plain)})")
             return plain, None
 
     except Exception as e:
-        logging.error(f"Response formatting error: {e} — falling back to plain text")
+        logging.error(f"Response formatting error: {e}")
+        logging.debug(f"Exception occurred while formatting (len={len(bot_text)}): {bot_text[:300]}...")
         # Fail safe: return plain text
         plain = re.sub(r'[*_`\[\]()]', '', bot_text)
+        logging.info(f"Fallback to plain text due to exception (len={len(plain)})")
         return plain, None
