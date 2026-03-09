@@ -25,7 +25,21 @@ PORT = int(os.getenv("PORT", 8080))
 
 client = AsyncOpenAI(api_key=OPENAI_API_KEY)
 
-logging.basicConfig(format='%(asctime)s - %(levelname)s - %(message)s', level=logging.INFO)
+# Add TRACE logging level (below DEBUG)
+TRACE_LEVEL = 5
+logging.addLevelName(TRACE_LEVEL, "TRACE")
+
+def trace(self, message, *args, **kwargs):
+    if self.isEnabledFor(TRACE_LEVEL):
+        self._log(TRACE_LEVEL, message, args, **kwargs)
+
+logging.Logger.trace = trace
+
+# Configure logging with TRACE enabled
+logging.basicConfig(
+    format='%(asctime)s - %(levelname)s - %(message)s',
+    level=TRACE_LEVEL  # Enable TRACE and all higher levels
+)
 user_history = {}
 
 
@@ -61,12 +75,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Orchestrator: decide fast path vs agentic loop
     complexity = await classify_query(client, user_text)
+    logging.info(f"[ORCHESTRATOR] Query complexity: {complexity}")
 
     if complexity == "complex":
         # Agentic loop: LLM can call tools across multiple rounds
+        logging.info(f"[ORCHESTRATOR] Using agentic loop")
         bot_text = await run_agentic_loop(client, user_history[chat_id], TOOL_DEFINITIONS, tool_fns)
+        logging.info(f"[ORCHESTRATOR] Agentic loop returned text (len={len(bot_text)})")
     else:
         # Fast path: single OpenAI call + at most one round of tool calls
+        logging.info(f"[ORCHESTRATOR] Using fast path")
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=user_history[chat_id],
@@ -74,8 +92,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             tool_choice="auto"
         )
         response_message = response.choices[0].message
+        logging.info(f"[ORCHESTRATOR] First response: has_tool_calls={bool(response_message.tool_calls)}")
 
         if response_message.tool_calls:
+            logging.info(f"[ORCHESTRATOR] Tool calls: {[tc.function.name for tc in response_message.tool_calls]}")
             user_history[chat_id].append(response_message.model_dump())
 
             for tool_call in response_message.tool_calls:
@@ -83,37 +103,52 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 fn_args = json.loads(tool_call.function.arguments)
                 fn = tool_fns.get(fn_name)
                 content = fn(**fn_args) if fn else "Unknown tool."
+                logging.info(f"[ORCHESTRATOR] Tool {fn_name} returned: {str(content)[:100]}...")
                 user_history[chat_id].append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
                     "content": content
                 })
 
+            logging.info(f"[ORCHESTRATOR] Making second request with tool results")
             second_response = await client.chat.completions.create(
                 model="gpt-4o-mini",
                 messages=user_history[chat_id]
             )
             bot_text = second_response.choices[0].message.content
+            logging.info(f"[ORCHESTRATOR] Second response text (len={len(bot_text)})")
         else:
             bot_text = response_message.content
+            logging.info(f"[ORCHESTRATOR] Direct response text (len={len(bot_text)})")
         user_history[chat_id].append({"role": "assistant", "content": bot_text})
+
+    # Log raw LLM response before formatting
+    logging.info(f"[RESPONSE] Raw LLM output (len={len(bot_text)})")
+    logging.trace(f"[RESPONSE] Raw text:\n{bot_text}\n--- END RAW ---")
 
     # Format and send reply immediately — don't wait for memory persistence
     formatted_text, parse_mode = await format_response(bot_text)
-    logging.info(f"Sending: parse_mode={parse_mode}, len={len(formatted_text)}")
+
+    logging.info(f"[RESPONSE] Formatted text (len={len(formatted_text)}), parse_mode={parse_mode}")
+    logging.trace(f"[RESPONSE] Final formatted:\n{formatted_text}\n--- END FORMATTED ---")
+
     try:
         if parse_mode:
             await update.message.reply_text(formatted_text, parse_mode=parse_mode)
         else:
             await update.message.reply_text(formatted_text)
+        logging.info(f"[RESPONSE] Successfully sent to Telegram")
     except Exception as e:
-        logging.error(f"Failed to send message: {e}")
-        logging.debug(f"Problematic text: {formatted_text[:500]}")
+        logging.error(f"[RESPONSE] Failed to send message: {e}")
+        logging.trace(f"[RESPONSE] Problematic text: {formatted_text[:500]}")
         # Last resort: send plain text with NO formatting
         try:
-            await update.message.reply_text(re.sub(r'[*_`\[\]()]', '', formatted_text))
+            stripped = re.sub(r'[*_`\[\]()]', '', formatted_text)
+            logging.info(f"[RESPONSE] Retrying with stripped text (len={len(stripped)})")
+            await update.message.reply_text(stripped)
+            logging.info(f"[RESPONSE] Successfully sent stripped version")
         except Exception as e2:
-            logging.error(f"Failed even with stripped text: {e2}")
+            logging.error(f"[RESPONSE] Failed even with stripped text: {e2}")
 
     # Persist to mem0 in the background so it doesn't block the response
     loop = asyncio.get_event_loop()

@@ -173,29 +173,34 @@ async def format_response(bot_text: str) -> tuple[str, str]:
     if not bot_text:
         return "", None
 
+    logging.info(f"[FORMAT] Input bot_text (len={len(bot_text)})")
+    logging.trace(f"[FORMAT] Raw input:\n{bot_text}")
+
     try:
         # Step 1: Normalize
         normalized = normalize_to_markdownv2(bot_text)
+        logging.info(f"[FORMAT] After normalize (len={len(normalized)})")
+        if len(normalized) != len(bot_text):
+            logging.trace(f"[FORMAT] Normalized text:\n{normalized}")
 
         # Step 2: Validate
         is_valid, error_msg = validate_markdownv2(normalized)
+        logging.info(f"[FORMAT] Validation result: is_valid={is_valid}, error='{error_msg}'")
 
         if is_valid:
-            logging.info("Response formatted as MarkdownV2 (valid)")
-            logging.debug(f"MarkdownV2 output (len={len(normalized)}): {normalized[:200]}...")
+            logging.info(f"[FORMAT] Sending as MarkdownV2 (len={len(normalized)})")
             return normalized, ParseMode.MARKDOWN_V2
         else:
-            logging.warning(f"MarkdownV2 validation failed: {error_msg}")
-            logging.debug(f"Invalid MarkdownV2 (len={len(normalized)}): {normalized[:300]}...")
+            logging.warning(f"[FORMAT] MarkdownV2 validation failed: {error_msg}")
             # Strip all markdown/HTML for plain text fallback
             plain = re.sub(r'[*_`\[\]()]', '', bot_text)
-            logging.info(f"Fallback to plain text (len={len(plain)})")
+            logging.info(f"[FORMAT] Fallback to plain text (len={len(plain)})")
+            logging.trace(f"[FORMAT] Plain text:\n{plain}")
             return plain, None
 
     except Exception as e:
-        logging.error(f"Response formatting error: {e}")
-        logging.debug(f"Exception occurred while formatting (len={len(bot_text)}): {bot_text[:300]}...")
+        logging.error(f"[FORMAT] Exception: {e}", exc_info=True)
         # Fail safe: return plain text
         plain = re.sub(r'[*_`\[\]()]', '', bot_text)
-        logging.info(f"Fallback to plain text due to exception (len={len(plain)})")
+        logging.info(f"[FORMAT] Fallback to plain text due to exception (len={len(plain)})")
         return plain, None

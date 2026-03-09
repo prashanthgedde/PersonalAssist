@@ -79,6 +79,7 @@ async def run_agentic_loop(
     Returns the final assistant text.
     """
     for iteration in range(MAX_AGENTIC_ITERATIONS):
+        logging.info(f"[AGENTIC] Iteration {iteration + 1}/{MAX_AGENTIC_ITERATIONS}")
         response = await client.chat.completions.create(
             model="gpt-4o-mini",
             messages=messages,
@@ -90,11 +91,15 @@ async def run_agentic_loop(
         if not msg.tool_calls:
             # LLM finished — no more tool calls
             messages.append({"role": "assistant", "content": msg.content})
-            logging.info(f"Agentic loop done after {iteration + 1} iteration(s)")
+            logging.info(f"[AGENTIC] Loop done after {iteration + 1} iteration(s), response len={len(msg.content)}")
+            logging.trace(f"[AGENTIC] Final response:\n{msg.content}\n--- END ---")
             return msg.content
 
         # Execute all tool calls in this round
+        tool_names = [tc.function.name for tc in msg.tool_calls]
+        logging.info(f"[AGENTIC] Iteration {iteration + 1}: tool calls: {tool_names}")
         messages.append(msg.model_dump())
+
         for tool_call in msg.tool_calls:
             fn_name = tool_call.function.name
             fn_args = json.loads(tool_call.function.arguments)
@@ -102,10 +107,13 @@ async def run_agentic_loop(
             if fn:
                 try:
                     result = fn(**fn_args)
+                    logging.info(f"[AGENTIC] Tool {fn_name} succeeded: {str(result)[:100]}...")
                 except Exception as e:
                     result = f"Tool error: {e}"
+                    logging.error(f"[AGENTIC] Tool {fn_name} failed: {e}")
             else:
                 result = "Unknown tool."
+                logging.warning(f"[AGENTIC] Unknown tool: {fn_name}")
 
             messages.append({
                 "role": "tool",
@@ -113,10 +121,10 @@ async def run_agentic_loop(
                 "content": result,
             })
 
-        logging.info(f"Agentic loop iteration {iteration + 1} complete")
+        logging.info(f"[AGENTIC] Iteration {iteration + 1} complete")
 
     # Max iterations hit — ask LLM to wrap up with what it has
-    logging.warning("Agentic loop hit max iterations, requesting final summary")
+    logging.warning("[AGENTIC] Hit max iterations, requesting final summary")
     messages.append({
         "role": "user",
         "content": "Please summarize everything you've found and give a final answer now.",
@@ -124,4 +132,6 @@ async def run_agentic_loop(
     response = await client.chat.completions.create(model="gpt-4o-mini", messages=messages)
     final = response.choices[0].message.content
     messages.append({"role": "assistant", "content": final})
+    logging.info(f"[AGENTIC] Max iterations summary response len={len(final)}")
+    logging.trace(f"[AGENTIC] Summary response:\n{final}\n--- END ---")
     return final
