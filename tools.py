@@ -11,7 +11,7 @@ except ImportError:
     _tavily = None
 
 
-def search_web(query: str, sources: list[str] | None = None) -> str:
+def search_web(query: str, sources: list[str] | None = None, topic: str | None = None) -> str:
     """Searches the web using Tavily (primary) or DuckDuckGo (fallback)."""
     logging.info(f"Searching for: {query}")
     logging.info(f"[SEARCH] Tavily available: {_tavily is not None}")
@@ -21,7 +21,9 @@ def search_web(query: str, sources: list[str] | None = None) -> str:
             kwargs = {"max_results": 5}
             if sources:
                 kwargs["include_domains"] = sources
-            logging.info(f"[SEARCH] Calling Tavily API: query='{query}', sources={sources}")
+            if topic:
+                kwargs["topic"] = topic
+            logging.info(f"[SEARCH] Calling Tavily API: query='{query}', sources={sources}, topic={topic}")
             logging.debug(f"[SEARCH] Tavily request kwargs: {kwargs}")
             response = _tavily.search(query, **kwargs)
             logging.info(f"[SEARCH] Tavily returned {len(response.get('results', []))} results")
@@ -109,6 +111,11 @@ TOOL_DEFINITIONS = [
                         "type": "array",
                         "items": {"type": "string"},
                         "description": "Optional list of domains to restrict search to, e.g. ['reddit.com', 'x.com']"
+                    },
+                    "topic": {
+                        "type": "string",
+                        "description": "Optional topic filter: 'news' for news articles, 'general' for general web search",
+                        "enum": ["news", "general"]
                     }
                 },
                 "required": ["query"]
@@ -155,6 +162,37 @@ TOOL_DEFINITIONS = [
                     "remind_at": {"type": "string", "description": "ISO 8601 datetime string e.g. 2026-03-05T15:00:00"}
                 },
                 "required": ["message", "remind_at"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_portfolio",
+            "description": "Get current portfolio holdings and total value with real-time stock prices",
+            "parameters": {
+                "type": "object",
+                "properties": {}
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_portfolio",
+            "description": "Add, update, or remove stock holdings from portfolio",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {"type": "string", "description": "Stock ticker symbol, e.g. AAPL, TSLA"},
+                    "quantity": {"type": "number", "description": "Number of shares (positive integer)"},
+                    "action": {
+                        "type": "string",
+                        "description": "Action to perform: 'set' (replace qty), 'add' (increase qty), or 'remove' (delete holding)",
+                        "enum": ["set", "add", "remove"]
+                    }
+                },
+                "required": ["ticker", "quantity"]
             }
         }
     }
