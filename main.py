@@ -89,8 +89,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 fn_name = tool_call.function.name
                 fn_args = json.loads(tool_call.function.arguments)
                 fn = tool_fns.get(fn_name)
+                logging.debug(f"[ORCHESTRATOR] Tool {fn_name} called with args: {fn_args}")
                 content = fn(**fn_args) if fn else "Unknown tool."
                 logging.info(f"[ORCHESTRATOR] Tool {fn_name} returned: {str(content)[:100]}...")
+                logging.debug(f"[ORCHESTRATOR] {fn_name} full result:\n{content}")
                 user_history[chat_id].append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,

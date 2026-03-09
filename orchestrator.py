@@ -107,10 +107,12 @@ async def run_agentic_loop(
             fn_name = tool_call.function.name
             fn_args = json.loads(tool_call.function.arguments)
             fn = tool_fns.get(fn_name)
+            logging.debug(f"[AGENTIC] Tool {fn_name} called with args: {fn_args}")
             if fn:
                 try:
                     result = fn(**fn_args)
                     logging.info(f"[AGENTIC] Tool {fn_name} succeeded: {str(result)[:100]}...")
+                    logging.debug(f"[AGENTIC] {fn_name} full result:\n{result}")
                 except Exception as e:
                     result = f"Tool error: {e}"
                     logging.error(f"[AGENTIC] Tool {fn_name} failed: {e}")
