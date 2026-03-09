@@ -4,7 +4,7 @@ import logging
 import os
 import re
 
-# MUST import logging_config first to set up TRACE logging before other modules
+# MUST import logging_config first to set up DEBUG logging before other modules
 import logging_config  # noqa: F401
 
 from dotenv import load_dotenv
@@ -111,13 +111,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Log raw LLM response before formatting
     logging.info(f"[RESPONSE] Raw LLM output (len={len(bot_text)})")
-    logging.trace(f"[RESPONSE] Raw text:\n{bot_text}\n--- END RAW ---")
+    logging.debug(f"[RESPONSE] Raw text:\n{bot_text}\n--- END RAW ---")
 
     # Format and send reply immediately — don't wait for memory persistence
     formatted_text, parse_mode = await format_response(bot_text)
 
     logging.info(f"[RESPONSE] Formatted text (len={len(formatted_text)}), parse_mode={parse_mode}")
-    logging.trace(f"[RESPONSE] Final formatted:\n{formatted_text}\n--- END FORMATTED ---")
+    logging.debug(f"[RESPONSE] Final formatted:\n{formatted_text}\n--- END FORMATTED ---")
 
     try:
         if parse_mode:
@@ -127,7 +127,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info(f"[RESPONSE] Successfully sent to Telegram")
     except Exception as e:
         logging.error(f"[RESPONSE] Failed to send message: {e}")
-        logging.trace(f"[RESPONSE] Problematic text: {formatted_text[:500]}")
+        logging.debug(f"[RESPONSE] Problematic text: {formatted_text[:500]}")
         # Last resort: send plain text with NO formatting
         try:
             stripped = re.sub(r'[*_`\[\]()]', '', formatted_text)

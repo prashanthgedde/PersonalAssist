@@ -1,7 +1,7 @@
 import json
 import logging
 
-# Import logging_config to ensure TRACE level is available
+# Import logging_config to ensure DEBUG level is available
 import logging_config  # noqa: F401
 
 from openai import AsyncOpenAI
@@ -95,7 +95,7 @@ async def run_agentic_loop(
             # LLM finished — no more tool calls
             messages.append({"role": "assistant", "content": msg.content})
             logging.info(f"[AGENTIC] Loop done after {iteration + 1} iteration(s), response len={len(msg.content)}")
-            logging.trace(f"[AGENTIC] Final response:\n{msg.content}\n--- END ---")
+            logging.debug(f"[AGENTIC] Final response:\n{msg.content}\n--- END ---")
             return msg.content
 
         # Execute all tool calls in this round
@@ -136,5 +136,5 @@ async def run_agentic_loop(
     final = response.choices[0].message.content
     messages.append({"role": "assistant", "content": final})
     logging.info(f"[AGENTIC] Max iterations summary response len={len(final)}")
-    logging.trace(f"[AGENTIC] Summary response:\n{final}\n--- END ---")
+    logging.debug(f"[AGENTIC] Summary response:\n{final}\n--- END ---")
     return final

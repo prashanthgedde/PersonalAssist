@@ -1,7 +1,7 @@
 import logging
 import re
 
-# Import logging_config to ensure TRACE level is available
+# Import logging_config to ensure DEBUG level is available
 import logging_config  # noqa: F401
 
 from telegram.constants import ParseMode
@@ -177,14 +177,14 @@ async def format_response(bot_text: str) -> tuple[str, str]:
         return "", None
 
     logging.info(f"[FORMAT] Input bot_text (len={len(bot_text)})")
-    logging.trace(f"[FORMAT] Raw input:\n{bot_text}")
+    logging.debug(f"[FORMAT] Raw input:\n{bot_text}")
 
     try:
         # Step 1: Normalize
         normalized = normalize_to_markdownv2(bot_text)
         logging.info(f"[FORMAT] After normalize (len={len(normalized)})")
         if len(normalized) != len(bot_text):
-            logging.trace(f"[FORMAT] Normalized text:\n{normalized}")
+            logging.debug(f"[FORMAT] Normalized text:\n{normalized}")
 
         # Step 2: Validate
         is_valid, error_msg = validate_markdownv2(normalized)
@@ -198,7 +198,7 @@ async def format_response(bot_text: str) -> tuple[str, str]:
             # Strip all markdown/HTML for plain text fallback
             plain = re.sub(r'[*_`\[\]()]', '', bot_text)
             logging.info(f"[FORMAT] Fallback to plain text (len={len(plain)})")
-            logging.trace(f"[FORMAT] Plain text:\n{plain}")
+            logging.debug(f"[FORMAT] Plain text:\n{plain}")
             return plain, None
 
     except Exception as e:
