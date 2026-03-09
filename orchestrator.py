@@ -1,5 +1,6 @@
 import json
 import logging
+import time
 
 # Import logging_config to ensure DEBUG level is available
 import logging_config  # noqa: F401
@@ -72,12 +73,14 @@ async def run_agentic_loop(
     messages: list,
     tool_definitions: list,
     tool_fns: dict,
+    summary=None,
 ) -> str:
     """
     Multi-step agentic loop: the LLM can call tools repeatedly across multiple
     rounds until it produces a final answer or MAX_AGENTIC_ITERATIONS is reached.
 
     tool_fns: dict mapping tool name -> callable (kwargs-based dispatch)
+    summary: optional ResponseSummary to track tool calls and iterations
     Mutates `messages` in-place so the caller's history stays current.
     Returns the final assistant text.
     """
@@ -94,6 +97,8 @@ async def run_agentic_loop(
         if not msg.tool_calls:
             # LLM finished — no more tool calls
             messages.append({"role": "assistant", "content": msg.content})
+            if summary:
+                summary.agentic_loops = iteration + 1
             logging.info(f"[AGENTIC] Loop done after {iteration + 1} iteration(s), response len={len(msg.content)}")
             logging.debug(f"[AGENTIC] Final response:\n{msg.content}\n--- END ---")
             return msg.content
@@ -108,17 +113,25 @@ async def run_agentic_loop(
             fn_args = json.loads(tool_call.function.arguments)
             fn = tool_fns.get(fn_name)
             logging.debug(f"[AGENTIC] Tool {fn_name} called with args: {fn_args}")
+            tool_start = time.time()
             if fn:
                 try:
                     result = fn(**fn_args)
-                    logging.info(f"[AGENTIC] Tool {fn_name} succeeded: {str(result)[:100]}...")
+                    tool_latency_ms = (time.time() - tool_start) * 1000
+                    logging.info(f"[AGENTIC] Tool {fn_name} succeeded: {str(result)[:100]}... ({tool_latency_ms:.1f}ms)")
                     logging.debug(f"[AGENTIC] {fn_name} full result:\n{result}")
                 except Exception as e:
+                    tool_latency_ms = (time.time() - tool_start) * 1000
                     result = f"Tool error: {e}"
-                    logging.error(f"[AGENTIC] Tool {fn_name} failed: {e}")
+                    logging.error(f"[AGENTIC] Tool {fn_name} failed: {e} ({tool_latency_ms:.1f}ms)")
             else:
+                tool_latency_ms = (time.time() - tool_start) * 1000
                 result = "Unknown tool."
                 logging.warning(f"[AGENTIC] Unknown tool: {fn_name}")
+
+            # Record in summary
+            if summary:
+                summary.add_tool_call(fn_name, fn_args, result, sources=fn_args.get("sources"), latency_ms=tool_latency_ms)
 
             messages.append({
                 "role": "tool",

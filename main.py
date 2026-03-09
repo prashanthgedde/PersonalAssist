@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import re
+import time
 
 # MUST import logging_config first to set up DEBUG logging before other modules
 import logging_config  # noqa: F401
@@ -18,6 +19,7 @@ from memory import build_system_prompt, add_to_memory
 from reminders import init_scheduler, set_reminder
 from orchestrator import classify_query, run_agentic_loop
 from response_formatter import format_response
+from response_summary import ResponseSummary
 
 load_dotenv()
 
@@ -38,6 +40,9 @@ async def post_init(application: Application) -> None:
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     chat_id = update.effective_chat.id
     user_text = update.message.text
+
+    # Create summary tracker for this response
+    summary = ResponseSummary(chat_id=chat_id, query=user_text)
 
     # Show typing indicator immediately before any blocking calls
     await context.bot.send_chat_action(chat_id=chat_id, action="typing")
@@ -62,12 +67,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Orchestrator: decide fast path vs agentic loop
     complexity = await classify_query(client, user_text)
+    summary.classification = complexity
     logging.info(f"[ORCHESTRATOR] Query complexity: {complexity}")
 
     if complexity == "complex":
         # Agentic loop: LLM can call tools across multiple rounds
         logging.info(f"[ORCHESTRATOR] Using agentic loop")
-        bot_text = await run_agentic_loop(client, user_history[chat_id], TOOL_DEFINITIONS, tool_fns)
+        bot_text = await run_agentic_loop(client, user_history[chat_id], TOOL_DEFINITIONS, tool_fns, summary=summary)
         logging.info(f"[ORCHESTRATOR] Agentic loop returned text (len={len(bot_text)})")
     else:
         # Fast path: single OpenAI call + at most one round of tool calls
@@ -90,9 +96,13 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 fn_args = json.loads(tool_call.function.arguments)
                 fn = tool_fns.get(fn_name)
                 logging.debug(f"[ORCHESTRATOR] Tool {fn_name} called with args: {fn_args}")
+                tool_start = time.time()
                 content = fn(**fn_args) if fn else "Unknown tool."
-                logging.info(f"[ORCHESTRATOR] Tool {fn_name} returned: {str(content)[:100]}...")
+                tool_latency_ms = (time.time() - tool_start) * 1000
+                logging.info(f"[ORCHESTRATOR] Tool {fn_name} returned: {str(content)[:100]}... ({tool_latency_ms:.1f}ms)")
                 logging.debug(f"[ORCHESTRATOR] {fn_name} full result:\n{content}")
+                # Record in summary
+                summary.add_tool_call(fn_name, fn_args, content, sources=fn_args.get("sources"), latency_ms=tool_latency_ms)
                 user_history[chat_id].append({
                     "role": "tool",
                     "tool_call_id": tool_call.id,
@@ -112,11 +122,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user_history[chat_id].append({"role": "assistant", "content": bot_text})
 
     # Log raw LLM response before formatting
+    summary.lm_response_len = len(bot_text)
     logging.info(f"[RESPONSE] Raw LLM output (len={len(bot_text)})")
     logging.debug(f"[RESPONSE] Raw text:\n{bot_text}\n--- END RAW ---")
 
     # Format and send reply immediately — don't wait for memory persistence
     formatted_text, parse_mode = await format_response(bot_text)
+    summary.formatting = parse_mode or "plain"
+    summary.final_response_len = len(formatted_text)
 
     logging.info(f"[RESPONSE] Formatted text (len={len(formatted_text)}), parse_mode={parse_mode}")
     logging.debug(f"[RESPONSE] Final formatted:\n{formatted_text}\n--- END FORMATTED ---")
@@ -127,17 +140,22 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             await update.message.reply_text(formatted_text)
         logging.info(f"[RESPONSE] Successfully sent to Telegram")
+        summary.status = "sent"
     except Exception as e:
         logging.error(f"[RESPONSE] Failed to send message: {e}")
         logging.debug(f"[RESPONSE] Problematic text: {formatted_text[:500]}")
+        summary.error = str(e)
         # Last resort: send plain text with NO formatting
         try:
             stripped = re.sub(r'[*_`\[\]()]', '', formatted_text)
             logging.info(f"[RESPONSE] Retrying with stripped text (len={len(stripped)})")
             await update.message.reply_text(stripped)
             logging.info(f"[RESPONSE] Successfully sent stripped version")
+            summary.status = "sent_fallback"
         except Exception as e2:
             logging.error(f"[RESPONSE] Failed even with stripped text: {e2}")
+            summary.status = "failed"
+            summary.error = str(e2)
 
     # Persist to mem0 in the background so it doesn't block the response
     loop = asyncio.get_event_loop()
@@ -145,6 +163,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {"role": "user", "content": user_text},
         {"role": "assistant", "content": bot_text}
     ])
+
+    # Log consolidated summary
+    summary.log()
 
 
 if __name__ == '__main__':
