@@ -10,7 +10,6 @@ primary_region = 'sjc'
 
 [env]
   USER_TIMEZONE = "America/Los_Angeles"
-  CHROMA_PATH = "/data/chroma_db"
   PORT = "8080"
 
 [http_service]
@@ -20,10 +19,6 @@ primary_region = 'sjc'
   auto_start_machines = true
   min_machines_running = 1
   processes = ['app']
-
-[[mounts]]
-  source = "chroma_data"
-  destination = "/data/chroma_db"
 
 [[vm]]
   memory = '1gb'
