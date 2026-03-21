@@ -1,15 +1,13 @@
 import logging
 import time
+import re
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 from langgraph.prebuilt import ToolNode
 
-from agent.state import AgentState
 from agent.tools import TOOLS, TOOL_MAP
 
 logger = logging.getLogger(__name__)
-
-MAX_ITERATIONS = 6
 
 llm = None
 
@@ -50,7 +48,7 @@ def build_system_prompt() -> str:
         "- _italic_ for emphasis\n"
         "- `code` for values, tickers, commands\n"
         "- [link text](url) for links\n"
-        "For news or lists, use one item per line starting with a bullet (•). Keep responses concise and scannable on mobile.\n"
+        "For news or lists, use one item per line starting with a bullet (\u2022). Keep responses concise and scannable on mobile.\n"
         "IMPORTANT: Escape special characters with backslash when they appear outside formatting: _ * [ ] ( ) ~ ` > # + - = | { } . !\n\n"
         f"{datetime_line}"
     )
@@ -63,7 +61,12 @@ def build_system_prompt() -> str:
 
 def run_agent(chat_id: int, user_query: str, config: dict = None):
     """
-    Simple sequential agent: call LLM, optionally call tools, then call LLM again.
+    Simple sequential agent (SINGLE ROUND):
+    1. LLM call -> decides to use tools?
+    2. Execute ALL tools in parallel (one shot)
+    3. LLM call with results -> final response
+
+    Limitation: Cannot call more tools after seeing results.
     """
     logger.info(f"[AGENT] Processing query: {user_query[:50]}...")
 
@@ -108,8 +111,6 @@ def run_agent(chat_id: int, user_query: str, config: dict = None):
                 )
 
                 if tool_name == "search_web":
-                    import re
-
                     urls = re.findall(r"\[([^\]]+)\]\(([^\)]+)\)", str(result))
                     for title, url in urls:
                         sources.append({"title": title, "url": url})
