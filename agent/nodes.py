@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 MAX_ITERATIONS = 6
 
 llm = None
+streaming_llm = None
 
 
 def get_llm():
@@ -21,6 +22,16 @@ def get_llm():
         load_dotenv()
         llm = ChatOpenAI(model="gpt-4o-mini")
     return llm
+
+
+def get_streaming_llm():
+    global streaming_llm
+    if streaming_llm is None:
+        from dotenv import load_dotenv
+
+        load_dotenv()
+        streaming_llm = ChatOpenAI(model="gpt-4o-mini", streaming=True)
+    return streaming_llm
 
 
 def build_system_prompt() -> str:
@@ -64,9 +75,7 @@ def should_continue_tools(state: AgentState) -> str:
     """Determine whether to continue calling tools or generate final response."""
     messages = state["messages"]
 
-    has_tool_calls = any(
-        hasattr(msg, "tool_calls") and msg.tool_calls for msg in messages
-    )
+    has_tool_calls = any(hasattr(msg, "tool_calls") and msg.tool_calls for msg in messages)
 
     if not has_tool_calls:
         return "respond"
@@ -118,8 +127,7 @@ def respond_node(state: AgentState) -> AgentState:
         "final_response": response_text,
         "metadata": {
             **state.get("metadata", {}),
-            "total_latency_ms": state.get("metadata", {}).get("total_latency_ms", 0)
-            + latency_ms,
+            "total_latency_ms": state.get("metadata", {}).get("total_latency_ms", 0) + latency_ms,
         },
     }
 
@@ -152,7 +160,5 @@ def first_respond_node(state: AgentState) -> AgentState:
     return {
         **new_state,
         "should_use_tools": False,
-        "final_response": response.content
-        if hasattr(response, "content")
-        else str(response),
+        "final_response": response.content if hasattr(response, "content") else str(response),
     }

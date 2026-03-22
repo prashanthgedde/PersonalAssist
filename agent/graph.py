@@ -1,7 +1,7 @@
 import logging
+from typing import AsyncGenerator, Optional
 from langgraph.graph import StateGraph, END
 from langgraph.prebuilt import ToolNode
-from langgraph.checkpoint.memory import MemorySaver
 
 from agent.state import AgentState
 
@@ -77,7 +77,7 @@ def tools_node_wrapper(state):
 
 def create_agent_graph():
     """Create the LangGraph agent workflow."""
-    from agent.nodes import should_continue_tools, first_respond_node, respond_node
+    from agent.nodes import should_continue_tools, first_respond_node, respond_node  # noqa: F401
 
     workflow = StateGraph(AgentState)
 
@@ -148,17 +148,10 @@ def run_agent(chat_id: int, user_query: str, config: dict = None):
     }
     logger.info(f"[RUN_AGENT] Initial state: {initial_state}")
 
-    checkpoint_config = None
-
     final_state = None
-    if checkpoint_config:
-        for state in graph.stream(initial_state, checkpoint_config):
-            final_state = state
-            logger.debug(f"Graph state: {list(state.keys())}")
-    else:
-        for state in graph.stream(initial_state):
-            final_state = state
-            logger.debug(f"Graph state: {list(state.keys())}")
+    for state in graph.stream(initial_state):
+        final_state = state
+        logger.debug(f"Graph state: {list(state.keys())}")
 
     if final_state:
         for node_data in final_state.values():
@@ -166,3 +159,79 @@ def run_agent(chat_id: int, user_query: str, config: dict = None):
                 return node_data
 
     return {"final_response": "No response generated", "sources": [], "metadata": {}}
+
+
+async def run_agent_streaming(chat_id: int, user_query: str) -> AsyncGenerator[dict, None]:
+    """
+    Run the agent with streaming support.
+
+    Yields:
+        dict with keys: 'type' (stream/respond/tools/done), 'content' (text), etc.
+    """
+    global agent_graph
+    agent_graph = None
+
+    logger.info(f"[RUN_AGENT_STREAMING] Starting with query: {user_query[:50]}...")
+
+    graph = get_agent_graph()
+
+    initial_state = {
+        "messages": [],
+        "user_query": user_query,
+        "chat_id": chat_id,
+        "tool_calls": [],
+        "sources": [],
+        "final_response": "",
+        "metadata": {},
+        "should_use_tools": False,
+        "iteration_count": 0,
+    }
+
+    accumulated_response = ""
+
+    async for event in graph.astream_events(initial_state, version="v2"):
+        event_type = event.get("event")
+
+        if event_type == "on_chat_model_stream":
+            chunk = event.get("data", {}).get("chunk")
+            if chunk and hasattr(chunk, "content") and chunk.content:
+                if isinstance(chunk.content, list):
+                    for part in chunk.content:
+                        if isinstance(part, dict) and part.get("type") == "text":
+                            accumulated_response += part.get("text", "")
+                        elif isinstance(part, str):
+                            accumulated_response += part
+                elif isinstance(chunk.content, str):
+                    accumulated_response += chunk.content
+
+                yield {
+                    "type": "stream",
+                    "chunk": chunk.content,
+                    "content": accumulated_response,
+                }
+
+        elif event_type == "on_chain_end":
+            node_name = event.get("name", "")
+            if node_name == "tools":
+                yield {"type": "tools", "content": "Tools executed"}
+            elif node_name == "respond":
+                output = event.get("data", {}).get("output", {})
+                if isinstance(output, dict):
+                    final_response = output.get("final_response", accumulated_response)
+                    sources = output.get("sources", [])
+                    metadata = output.get("metadata", {})
+                    yield {
+                        "type": "respond",
+                        "content": final_response,
+                        "sources": sources,
+                        "metadata": metadata,
+                    }
+
+        elif event_type == "on_tool_start":
+            tool_name = event.get("name", "")
+            yield {"type": "tools_start", "content": f"Calling {tool_name}..."}
+
+        elif event_type == "on_tool_end":
+            yield {"type": "tools_end", "content": "Tool complete"}
+
+    yield {"type": "done", "content": accumulated_response}
