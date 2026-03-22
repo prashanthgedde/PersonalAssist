@@ -192,6 +192,8 @@ async def run_agent_streaming(chat_id: int, user_query: str) -> AsyncGenerator[d
 
     accumulated_response = ""
 
+    logger.info("[LANGGRAPH_STREAMING] Starting streaming graph execution")
+
     async for event in graph.astream_events(initial_state, version="v2"):
         event_type = event.get("event")
 
