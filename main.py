@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 import logging_config  # noqa: F401
-from agent.graph import run_agent_streaming
+from agent.graph import run_agent
 from response_formatter import format_response
 
 load_dotenv()
@@ -21,7 +21,6 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 8080))
-STREAM_CHUNK_SIZE = 50
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -33,47 +32,14 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logging.info(f"[HANDLE] Processing message from chat_id={chat_id}")
     logging.info(f"[HANDLE] User query: {user_text[:100]}...")
 
-    accumulated_response = ""
-    final_sources = []
-    final_metadata = {}
-    message_id = None
-
     try:
-        logging.info("[MAIN] Calling run_agent_streaming")
-        async for event in run_agent_streaming(chat_id=chat_id, user_query=user_text):
-            logging.info(f"[MAIN] Got event type: {event.get('type')}")
-            event_type = event.get("type")
-            content = event.get("content", "")
+        logging.info("[MAIN] Calling run_agent")
+        result = run_agent(chat_id=chat_id, user_query=user_text)
+        logging.info(f"[MAIN] Got result type: {type(result)}")
 
-            if event_type == "tools_start":
-                await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-
-            elif event_type == "stream":
-                accumulated_response = content
-                if len(content) >= STREAM_CHUNK_SIZE:
-                    try:
-                        if message_id is None:
-                            sent = await update.message.reply_text(content[:4096])
-                            message_id = sent.message_id
-                        else:
-                            sent = await context.bot.edit_message_text(
-                                chat_id=chat_id,
-                                message_id=message_id,
-                                text=content[:4096],
-                            )
-                            message_id = sent.message_id
-                    except Exception as e:
-                        logging.debug(f"[STREAM] Could not update message: {e}")
-
-            elif event_type == "respond":
-                accumulated_response = content
-                final_sources = event.get("sources", [])
-                final_metadata = event.get("metadata", {})
-
-            elif event_type == "done":
-                accumulated_response = content
-
-        bot_text = accumulated_response or "No response generated"
+        bot_text = result.get("final_response", "No response generated")
+        final_sources = result.get("sources", [])
+        final_metadata = result.get("metadata", {})
 
         logging.info(f"[RESPONSE] Raw LLM output (len={len(bot_text)})")
         logging.debug(f"[RESPONSE] Raw text:\n{bot_text}\n--- END RAW ---")
@@ -84,12 +50,6 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"[RESPONSE] Formatted text (len={len(formatted_text)}), parse_mode={parse_mode}"
         )
 
-        try:
-            if message_id is not None:
-                await context.bot.delete_message(chat_id=chat_id, message_id=message_id)
-        except Exception:
-            pass
-
         if parse_mode:
             await update.message.reply_text(formatted_text, parse_mode=parse_mode)
         else:
@@ -97,7 +57,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logging.info("[RESPONSE] Successfully sent to Telegram")
 
     except Exception as e:
-        logging.error(f"[HANDLE] Streaming failed: {e}")
+        logging.error(f"[HANDLE] Agent failed: {e}")
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         await asyncio.sleep(0.5)
         with suppress(Exception):
