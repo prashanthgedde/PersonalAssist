@@ -4,7 +4,7 @@ import os
 
 MEMORY_FILE = "user_memory.json"
 SUMMARIZE_THRESHOLD = 20  # messages before summarizing
-KEEP_RECENT = 6           # messages to retain after summarization
+KEEP_RECENT = 6  # messages to retain after summarization
 
 BASE_SYSTEM_PROMPT = (
     "You are a helpful assistant with web access. "
@@ -59,9 +59,12 @@ def maybe_summarize(chat_id: int, history: list, client) -> list:
         response = client.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "Summarize the following conversation concisely, preserving key facts, decisions, and context."},
-                {"role": "user", "content": json.dumps(to_summarize)}
-            ]
+                {
+                    "role": "system",
+                    "content": "Summarize the following conversation concisely, preserving key facts, decisions, and context.",
+                },
+                {"role": "user", "content": json.dumps(to_summarize)},
+            ],
         )
         summary = response.choices[0].message.content
         system_msg = next((m for m in history if m.get("role") == "system"), None)

@@ -99,9 +99,7 @@ class TestWeatherTool:
                 }
             ],
         }
-        with patch(
-            "agent.tools.weather_lookup.requests.get", return_value=mock_response
-        ):
+        with patch("agent.tools.weather_lookup.requests.get", return_value=mock_response):
             result = _get_weather_impl("London")
             assert result["city"] == "London"
             assert result["country"] == "UK"

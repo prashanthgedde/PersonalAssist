@@ -81,9 +81,7 @@ def format_as_html(text: str, sources: list[dict] = None, metadata: dict = None)
     return "\n".join(parts)
 
 
-def format_response(
-    bot_text: str, sources: list = None, metadata: dict = None
-) -> tuple[str, str]:
+def format_response(bot_text: str, sources: list = None, metadata: dict = None) -> tuple[str, str]:
     """
     Main entry point - returns (formatted_text, parse_mode).
     For HTML, returns (html_content, "HTML").

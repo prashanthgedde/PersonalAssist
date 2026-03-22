@@ -2,10 +2,10 @@ import json
 import logging
 import time
 
+from openai import AsyncOpenAI
+
 # Import logging_config to ensure DEBUG level is available
 import logging_config  # noqa: F401
-
-from openai import AsyncOpenAI
 
 _ORCHESTRATOR_SYSTEM = (
     "Classify whether the user's request requires simple or complex processing.\n\n"

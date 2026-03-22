@@ -1,5 +1,6 @@
 import logging
 import os
+
 import requests
 import yfinance as yf
 from duckduckgo_search import DDGS

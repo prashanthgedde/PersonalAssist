@@ -79,7 +79,7 @@ def build_system_prompt(chat_id: int, query: str = "") -> str:
                 context = "\n".join(f"- {m}" for m in memories)
                 logging.debug(f"[MEMORY] Memories:\n{context}")
             else:
-                logging.info(f"[MEMORY] No relevant memories found")
+                logging.info("[MEMORY] No relevant memories found")
         except Exception as e:
             logging.error(f"[MEMORY] Search failed: {e}", exc_info=True)
 

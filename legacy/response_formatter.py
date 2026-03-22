@@ -1,10 +1,10 @@
 import logging
 import re
 
+from telegram.constants import ParseMode
+
 # Import logging_config to ensure DEBUG level is available
 import logging_config  # noqa: F401
-
-from telegram.constants import ParseMode
 
 # MarkdownV2 special characters that must be escaped when not part of formatting
 MARKDOWNV2_SPECIAL_CHARS = set("_*[]()~`>#+-=|{}.!")

@@ -8,9 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class WeatherInput(BaseModel):
-    location: str = Field(
-        description="City name or location, e.g. 'London', 'New York'"
-    )
+    location: str = Field(description="City name or location, e.g. 'London', 'New York'")
 
 
 def _get_weather_impl(location: str) -> dict:

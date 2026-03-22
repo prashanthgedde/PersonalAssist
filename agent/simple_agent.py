@@ -85,9 +85,7 @@ def run_agent(chat_id: int, user_query: str, config: dict = None):
     sources = []
 
     if hasattr(response, "tool_calls") and response.tool_calls:
-        logger.info(
-            f"[AGENT] Tool calls needed: {[tc.get('name') for tc in response.tool_calls]}"
-        )
+        logger.info(f"[AGENT] Tool calls needed: {[tc.get('name') for tc in response.tool_calls]}")
 
         tool_messages = []
         for tc in response.tool_calls:

@@ -1,21 +1,18 @@
 import asyncio
 import logging
 import os
-import re
-from datetime import datetime
-
-import logging_config  # noqa: F401
+from contextlib import suppress
 
 from dotenv import load_dotenv
 from telegram import Update
 from telegram.ext import (
-    Application,
     ApplicationBuilder,
     ContextTypes,
     MessageHandler,
     filters,
 )
 
+import logging_config  # noqa: F401
 from agent.graph import run_agent_streaming
 from response_formatter import format_response
 
@@ -95,18 +92,16 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(formatted_text, parse_mode=parse_mode)
         else:
             await update.message.reply_text(formatted_text)
-        logging.info(f"[RESPONSE] Successfully sent to Telegram")
+        logging.info("[RESPONSE] Successfully sent to Telegram")
 
     except Exception as e:
         logging.error(f"[HANDLE] Streaming failed: {e}")
         await context.bot.send_chat_action(chat_id=chat_id, action="typing")
         await asyncio.sleep(0.5)
-        try:
+        with suppress(Exception):
             await update.message.reply_text(
-                f"Sorry, I encountered an error processing your request."
+                "Sorry, I encountered an error processing your request."
             )
-        except Exception:
-            pass
 
 
 if __name__ == "__main__":

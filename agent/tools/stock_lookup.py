@@ -34,9 +34,7 @@ def _get_stock_impl(ticker: str) -> dict:
 
 class GetStockTool(BaseTool):
     name: str = "get_stock"
-    description: str = (
-        "Get current stock price and key financial info for a ticker symbol"
-    )
+    description: str = "Get current stock price and key financial info for a ticker symbol"
     args_schema: type[BaseModel] = StockInput
 
     def _run(self, ticker: str) -> str:
