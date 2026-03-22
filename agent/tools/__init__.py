@@ -1,6 +1,6 @@
-from agent.tools.web_search import SearchWebTool
 from agent.tools.stock_lookup import GetStockTool
 from agent.tools.weather_lookup import GetWeatherTool
+from agent.tools.web_search import SearchWebTool
 
 TOOLS = [
     SearchWebTool(),

@@ -1,8 +1,8 @@
-import pytest
-from unittest.mock import patch, MagicMock
-from agent.tools.web_search import SearchWebTool, _search_web_impl, SearchInput
-from agent.tools.stock_lookup import GetStockTool, _get_stock_impl, StockInput
-from agent.tools.weather_lookup import GetWeatherTool, _get_weather_impl, WeatherInput
+from unittest.mock import MagicMock, patch
+
+from agent.tools.stock_lookup import GetStockTool, StockInput, _get_stock_impl
+from agent.tools.weather_lookup import GetWeatherTool, WeatherInput, _get_weather_impl
+from agent.tools.web_search import SearchInput, SearchWebTool, _search_web_impl
 
 
 class TestWebSearchTool:

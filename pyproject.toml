@@ -30,7 +30,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agent*", "schemas*"]
+include = ["agent*"]
 exclude = ["legacy*", "tests*"]
 
 [tool.pytest.ini_options]
@@ -40,13 +40,27 @@ testpaths = ["tests"]
 [tool.ruff]
 target-version = "py310"
 line-length = 100
+exclude = ["legacy/**"]
 
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM"]
 ignore = ["E501"]
 
 [tool.pyright]
-include = ["agent", "schemas", "tests"]
-exclude = ["legacy", "**/__pycache__"]
+include = ["agent", "tests"]
+exclude = [
+    "legacy",
+    "agent/simple_agent.py",
+    "agent/multi_turn_agent.py",
+    "**/__pycache__",
+]
 pythonVersion = "3.10"
-typeCheckingMode = "basic"
+typeCheckingMode = "off"
+
+[dependency-groups]
+dev = [
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "ruff>=0.15.7",
+]

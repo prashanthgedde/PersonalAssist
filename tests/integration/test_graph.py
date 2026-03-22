@@ -1,5 +1,5 @@
-import pytest
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
 from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.graph import create_agent_graph, run_agent, tools_node_wrapper

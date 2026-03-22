@@ -1,12 +1,10 @@
-from typing import TypedDict, Annotated, Sequence
+import operator
+from collections.abc import Sequence
+from typing import Annotated, TypedDict
+
 from langchain_core.messages import (
     BaseMessage,
-    HumanMessage,
-    AIMessage,
-    SystemMessage,
-    ToolMessage,
 )
-import operator
 
 
 class AgentState(TypedDict):

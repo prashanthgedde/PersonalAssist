@@ -1,8 +1,8 @@
+import logging
+
+import requests
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from typing import Type
-import logging
-import requests
 
 logger = logging.getLogger(__name__)
 
@@ -47,7 +47,7 @@ def _get_weather_impl(location: str) -> dict:
 class GetWeatherTool(BaseTool):
     name: str = "get_weather"
     description: str = "Get current weather conditions for a city or location"
-    args_schema: Type[BaseModel] = WeatherInput
+    args_schema: type[BaseModel] = WeatherInput
 
     def _run(self, location: str) -> str:
         result = _get_weather_impl(location)

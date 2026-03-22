@@ -1,8 +1,8 @@
+import logging
+
+import yfinance as yf
 from langchain_core.tools import BaseTool
 from pydantic import BaseModel, Field
-from typing import Type
-import logging
-import yfinance as yf
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class GetStockTool(BaseTool):
     description: str = (
         "Get current stock price and key financial info for a ticker symbol"
     )
-    args_schema: Type[BaseModel] = StockInput
+    args_schema: type[BaseModel] = StockInput
 
     def _run(self, ticker: str) -> str:
         result = _get_stock_impl(ticker)

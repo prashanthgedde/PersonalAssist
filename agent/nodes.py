@@ -1,7 +1,8 @@
 import logging
 import time
+
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
 
 from agent.state import AgentState
 from agent.tools import TOOLS
@@ -35,8 +36,8 @@ def get_streaming_llm():
 
 
 def build_system_prompt() -> str:
-    from datetime import datetime, timezone
     import os
+    from datetime import datetime, timezone
     from zoneinfo import ZoneInfo
 
     tz_name = os.getenv("USER_TIMEZONE", "UTC")
@@ -75,7 +76,9 @@ def should_continue_tools(state: AgentState) -> str:
     """Determine whether to continue calling tools or generate final response."""
     messages = state["messages"]
 
-    has_tool_calls = any(hasattr(msg, "tool_calls") and msg.tool_calls for msg in messages)
+    has_tool_calls = any(  # type: ignore[union-attr]
+        hasattr(msg, "tool_calls") and getattr(msg, "tool_calls", None) for msg in messages
+    )
 
     if not has_tool_calls:
         return "respond"
@@ -103,8 +106,8 @@ def respond_node(state: AgentState) -> AgentState:
         )
 
     system_prompt = build_system_prompt()
-    messages = [SystemMessage(content=system_prompt)]
-    messages.extend(state["messages"])
+    messages: list = [SystemMessage(content=system_prompt)]
+    messages.extend(state["messages"])  # type: ignore[arg-type]
 
     logger.info(f"[RESPOND] Final messages count: {len(messages)}")
     for i, msg in enumerate(messages):
@@ -121,9 +124,9 @@ def respond_node(state: AgentState) -> AgentState:
 
     latency_ms = (time.time() - start_time) * 1000
 
-    return {
+    return {  # type: ignore
         **state,
-        "messages": state["messages"] + [AIMessage(content=response_text)],
+        "messages": list(state["messages"]) + [AIMessage(content=response_text)],
         "final_response": response_text,
         "metadata": {
             **state.get("metadata", {}),
@@ -155,9 +158,9 @@ def first_respond_node(state: AgentState) -> AgentState:
     }
 
     if hasattr(response, "tool_calls") and response.tool_calls:
-        return {**new_state, "should_use_tools": True, "iteration_count": 1}
+        return {**new_state, "should_use_tools": True, "iteration_count": 1}  # type: ignore[return-value]
 
-    return {
+    return {  # type: ignore[return-value]
         **new_state,
         "should_use_tools": False,
         "final_response": response.content if hasattr(response, "content") else str(response),

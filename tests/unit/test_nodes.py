@@ -1,12 +1,12 @@
-import pytest
-from unittest.mock import patch, MagicMock
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from unittest.mock import MagicMock, patch
+
+from langchain_core.messages import AIMessage, HumanMessage
 
 from agent.nodes import (
     build_system_prompt,
-    should_continue_tools,
     first_respond_node,
     respond_node,
+    should_continue_tools,
 )
 from agent.state import AgentState
 

@@ -1,11 +1,11 @@
 import logging
-import time
 import re
-from typing import Optional
-from langchain_openai import ChatOpenAI
-from langchain_core.messages import HumanMessage, AIMessage, SystemMessage, ToolMessage
+import time
 
-from agent.tools import TOOLS, TOOL_MAP
+from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
+from langchain_openai import ChatOpenAI
+
+from agent.tools import TOOL_MAP, TOOLS
 
 logger = logging.getLogger(__name__)
 
@@ -25,8 +25,8 @@ def get_llm():
 
 
 def build_system_prompt() -> str:
-    from datetime import datetime, timezone
     import os
+    from datetime import datetime, timezone
     from zoneinfo import ZoneInfo
 
     tz_name = os.getenv("USER_TIMEZONE", "UTC")
@@ -77,7 +77,7 @@ def extract_sources_from_result(result_content: str):
     return sources
 
 
-def run_agent(chat_id: int, user_query: str, config: Optional[dict] = None):
+def run_agent(chat_id: int, user_query: str, config: dict | None = None):
     """
     Multi-turn agentic loop (ITERATIVE):
 

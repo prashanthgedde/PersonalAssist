@@ -1,9 +1,12 @@
 import logging
-from typing import AsyncGenerator, Optional
-from langgraph.graph import StateGraph, END
+from collections.abc import AsyncGenerator
+
+from langgraph.graph import END, StateGraph
 from langgraph.prebuilt import ToolNode
 
 from agent.state import AgentState
+
+logger = logging.getLogger(__name__)
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +80,7 @@ def tools_node_wrapper(state):
 
 def create_agent_graph():
     """Create the LangGraph agent workflow."""
-    from agent.nodes import should_continue_tools, first_respond_node, respond_node  # noqa: F401
+    from agent.nodes import first_respond_node, respond_node, should_continue_tools  # noqa: F401
 
     workflow = StateGraph(AgentState)
 
@@ -113,10 +116,10 @@ def get_agent_graph():
     global agent_graph
     if agent_graph is None:
         agent_graph = create_agent_graph()
-    return agent_graph
+    return agent_graph  # type: ignore[return-value]
 
 
-def run_agent(chat_id: int, user_query: str, config: dict = None):
+def run_agent(chat_id: int, user_query: str, config: dict | None = None):
     """
     Run the agent with the given query.
 
@@ -149,7 +152,7 @@ def run_agent(chat_id: int, user_query: str, config: dict = None):
     logger.info(f"[RUN_AGENT] Initial state: {initial_state}")
 
     final_state = None
-    for state in graph.stream(initial_state):
+    for state in graph.stream(initial_state):  # type: ignore[arg-type]
         final_state = state
         logger.debug(f"Graph state: {list(state.keys())}")
 

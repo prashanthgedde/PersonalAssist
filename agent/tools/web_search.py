@@ -1,17 +1,14 @@
-from langchain_core.tools import BaseTool
-from pydantic import BaseModel, Field
-from typing import Type, Optional
 import logging
 import os
-import requests
+
+from langchain_core.tools import BaseTool
+from pydantic import BaseModel, Field
 
 try:
     from tavily import TavilyClient
 
     _tavily = (
-        TavilyClient(api_key=os.getenv("TAVILY_API_KEY"))
-        if os.getenv("TAVILY_API_KEY")
-        else None
+        TavilyClient(api_key=os.getenv("TAVILY_API_KEY")) if os.getenv("TAVILY_API_KEY") else None
     )
 except ImportError:
     _tavily = None
@@ -23,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 class SearchInput(BaseModel):
     query: str = Field(description="The search query")
-    sources: Optional[list[str]] = Field(
+    sources: list[str] | None = Field(
         default=None, description="Optional list of domains to restrict search to"
     )
-    topic: Optional[str] = Field(
+    topic: str | None = Field(
         default=None, description="Optional topic filter: 'news' or 'general'"
     )
 
@@ -37,8 +34,6 @@ def _search_web_impl(
     """Searches the web using Tavily (primary) or DuckDuckGo (fallback)."""
     logger.info(f"Searching for: {query}")
     logger.info(f"[SEARCH] Tavily available: {_tavily is not None}")
-
-    results_list = []
 
     if _tavily:
         try:
@@ -51,9 +46,7 @@ def _search_web_impl(
                 f"[SEARCH] Calling Tavily API: query='{query}', sources={sources}, topic={topic}"
             )
             response = _tavily.search(query, **kwargs)
-            logger.info(
-                f"[SEARCH] Tavily returned {len(response.get('results', []))} results"
-            )
+            logger.info(f"[SEARCH] Tavily returned {len(response.get('results', []))} results")
             results = response.get("results", [])
             return {
                 "results": [
@@ -70,9 +63,9 @@ def _search_web_impl(
 
     try:
         with DDGS() as ddgs:
-            results = [r for r in ddgs.news(query, max_results=3)]
+            results = list(ddgs.news(query, max_results=3))
             if not results:
-                results = [r for r in ddgs.text(query, max_results=3)]
+                results = list(ddgs.text(query, max_results=3))
             return {
                 "results": [
                     {
@@ -94,11 +87,9 @@ class SearchWebTool(BaseTool):
         "Search the web for news, current events, Reddit discussions, YouTube videos, or any topic. "
         "Optionally restrict to specific sources like reddit.com, x.com, youtube.com, techcrunch.com."
     )
-    args_schema: Type[BaseModel] = SearchInput
+    args_schema: type[BaseModel] = SearchInput
 
-    def _run(
-        self, query: str, sources: list[str] | None = None, topic: str | None = None
-    ) -> str:
+    def _run(self, query: str, sources: list[str] | None = None, topic: str | None = None) -> str:
         result = _search_web_impl(query, sources, topic)
         if "error" in result:
             return f"Search failed: {result['error']}"
