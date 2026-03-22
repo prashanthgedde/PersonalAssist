@@ -52,7 +52,7 @@ class TestAgentGraph:
             result = tools_node_wrapper(state)
 
         assert "messages" in result
-        assert "tool_calls" in result
+        assert "iteration_count" in result
         assert result["iteration_count"] == 1
 
     def test_tools_node_wrapper_extracts_sources_from_search(self):

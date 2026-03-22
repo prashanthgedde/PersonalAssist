@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 
 import logging_config  # noqa: F401
-from agent.multi_turn_agent import run_agent
+from agent.graph import run_agent
 from response_formatter import format_response
 
 load_dotenv()

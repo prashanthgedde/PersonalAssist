@@ -1,17 +1,14 @@
 import operator
-from collections.abc import Sequence
 from typing import Annotated, TypedDict
 
-from langchain_core.messages import (
-    BaseMessage,
-)
+from langchain_core.messages import BaseMessage
 
 
 class AgentState(TypedDict):
-    messages: Annotated[Sequence[BaseMessage], operator.add]
+    messages: Annotated[list[BaseMessage], operator.add]
     user_query: str
     chat_id: int
-    tool_calls: list
+    tool_calls: list | int
     sources: list
     final_response: str
     metadata: dict
