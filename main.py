@@ -39,7 +39,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message_id = None
 
     try:
+        logging.info("[MAIN] Calling run_agent_streaming")
         async for event in run_agent_streaming(chat_id=chat_id, user_query=user_text):
+            logging.info(f"[MAIN] Got event type: {event.get('type')}")
             event_type = event.get("type")
             content = event.get("content", "")
 
