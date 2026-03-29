@@ -1,13 +1,9 @@
 import tempfile
 from pathlib import Path
 
-import pytest
-
 from memory.backends.in_memory import InMemoryBackend
 from memory.backends.markdown import MarkdownBackend
 from memory.manager import MemoryManager
-from memory.protocol import Message
-
 
 # ---------------------------------------------------------------------------
 # InMemoryBackend
