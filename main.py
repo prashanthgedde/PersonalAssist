@@ -14,6 +14,8 @@ from telegram.ext import (
 
 import logging_config  # noqa: F401
 from agent.multi_turn_agent import run_agent
+from memory.backends.markdown import MarkdownBackend
+from memory.manager import MemoryManager
 from response_formatter import format_response
 
 load_dotenv()
@@ -21,6 +23,12 @@ load_dotenv()
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")
 PORT = int(os.getenv("PORT", 8080))
+
+memory = MemoryManager(
+    backend=MarkdownBackend(root="data/memory"),
+    history_window=20,
+    long_term_enabled=True,
+)
 
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -34,7 +42,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         logging.info("[MAIN] Calling run_agent")
-        result = run_agent(chat_id=chat_id, user_query=user_text)
+        result = run_agent(chat_id=chat_id, user_query=user_text, memory=memory)
         logging.info(f"[MAIN] Got result type: {type(result)}")
 
         bot_text = result.get("final_response", "No response generated")
