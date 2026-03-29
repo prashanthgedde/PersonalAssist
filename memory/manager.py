@@ -1,7 +1,7 @@
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import AIMessage, HumanMessage
 
 from memory.protocol import MemoryBackend, Message
 
