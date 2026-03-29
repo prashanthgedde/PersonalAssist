@@ -11,5 +11,6 @@ RUN pip install --no-cache-dir --index-url https://pypi.org/simple .
 # Copy all application modules
 COPY *.py ./
 COPY agent/ ./agent/
+COPY memory/ ./memory/
 
 CMD ["python", "main.py"]
