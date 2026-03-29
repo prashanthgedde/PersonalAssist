@@ -6,6 +6,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
 from langchain_openai import ChatOpenAI
 
 from agent.tools import TOOL_MAP, TOOLS
+from memory.manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
@@ -77,7 +78,7 @@ def extract_sources_from_result(result_content: str):
     return sources
 
 
-def run_agent(chat_id: int, user_query: str, config: dict | None = None):
+def run_agent(chat_id: int, user_query: str, memory: MemoryManager | None = None, config: dict | None = None):
     """
     Multi-turn agentic loop (ITERATIVE):
 
@@ -112,8 +113,16 @@ def run_agent(chat_id: int, user_query: str, config: dict | None = None):
     llm = get_llm()
     llm_with_tools = llm.bind_tools(TOOLS)
 
-    system_msg = SystemMessage(content=build_system_prompt())
-    messages = [system_msg, HumanMessage(content=user_query)]
+    system_prompt = build_system_prompt()
+
+    # Inject long-term context into system prompt if memory is available
+    ctx = memory.load_context(chat_id, user_query) if memory else None
+    if ctx and ctx.long_term:
+        system_prompt += f"\n\n## What I know about you:\n{ctx.long_term}"
+
+    system_msg = SystemMessage(content=system_prompt)
+    history = ctx.history if ctx else []
+    messages = [system_msg, *history, HumanMessage(content=user_query)]
 
     tool_calls = []
     sources = []
@@ -193,6 +202,9 @@ def run_agent(chat_id: int, user_query: str, config: dict | None = None):
     logger.info(
         f"[AGENT] Done. iterations={iteration_count}, tools={len(tool_calls)}, latency={total_latency_ms:.0f}ms"
     )
+
+    if memory and final_text:
+        memory.save_context(chat_id, user_query, final_text)
 
     return {
         "final_response": final_text,

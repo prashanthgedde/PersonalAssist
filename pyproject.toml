@@ -30,7 +30,7 @@ dev = [
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["agent*"]
+include = ["agent*", "memory*"]
 exclude = ["legacy*", "tests*"]
 
 [tool.pytest.ini_options]
