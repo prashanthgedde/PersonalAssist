@@ -20,6 +20,10 @@ primary_region = 'sjc'
   min_machines_running = 1
   processes = ['app']
 
+[[mounts]]
+  source = "chroma_data"
+  destination = "/app/data"
+
 [[vm]]
   memory = '1gb'
   cpu_kind = 'shared'
