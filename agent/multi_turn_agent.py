@@ -3,26 +3,14 @@ import re
 import time
 
 from langchain_core.messages import HumanMessage, SystemMessage, ToolMessage
-from langchain_openai import ChatOpenAI
 
+from agent.llm import get_llm
 from agent.tools import TOOL_MAP, TOOLS
 from memory.manager import MemoryManager
 
 logger = logging.getLogger(__name__)
 
 MAX_ITERATIONS = 6
-
-llm = None
-
-
-def get_llm():
-    global llm
-    if llm is None:
-        from dotenv import load_dotenv
-
-        load_dotenv()
-        llm = ChatOpenAI(model="gpt-4o-mini")
-    return llm
 
 
 def build_system_prompt() -> str:
